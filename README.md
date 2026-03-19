@@ -2,7 +2,7 @@
 
 This library contains the new training and evaluation code for VTool-R1.
 
-It is implemented using the latest version of verl, commit 498c988ab7af49aa36c157c9214ebbc780013d61.
+It is implemented using the latest version of verl, commit 498c988ab7af49aa36c157c9214ebbc780013d61, using VLLM 0.17
 
 The library is implemented using the asynchronous agent loop, allowing for max GPU utilization for mult-turn tool use.
 
