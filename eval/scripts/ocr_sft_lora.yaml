@@ -1,0 +1,46 @@
+### model
+model_name_or_path: /mnt/disk1/weights/vlm/GLM-4.6V-Flash
+image_max_pixels: 262144
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 8
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target: all
+
+### dataset
+dataset: ocr_sft_train
+template: glm4_5v
+cutoff_len: 4096
+preprocessing_num_workers: 4
+dataloader_num_workers: 2
+
+### output
+output_dir: /mnt/disk1/szchen/VLMAlignment/training-v2/eval/sft_output/ocr_lora
+logging_steps: 5
+save_steps: 100
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: false
+report_to: none
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 4
+learning_rate: 2.0e-5
+num_train_epochs: 10.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+ddp_timeout: 180000000
+resume_from_checkpoint: null
+
+### eval
+val_size: 0.1
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 20

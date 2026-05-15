@@ -1,0 +1,2 @@
+- name: safe_vtool_agent
+  _target_: recipe.safe_vtool.safe_vtool_agent.SafeVToolAgentLoop

@@ -1,0 +1,11 @@
+### model
+model_name_or_path: /mnt/disk1/weights/vlm/GLM-4.6V-Flash
+adapter_name_or_path: /mnt/disk1/szchen/VLMAlignment/training-v2/eval/sft_output/ocr_lora
+template: glm4_5v
+trust_remote_code: true
+
+### export
+export_dir: /mnt/disk1/szchen/VLMAlignment/training-v2/eval/sft_output/ocr_sft_merged
+export_size: 5
+export_device: cpu
+export_legacy_format: false

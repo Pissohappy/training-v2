@@ -18,10 +18,17 @@ import os
 
 from packaging.version import parse as parse_version
 
-from .protocol import DataProto
 from .utils.device import is_npu_available
 from .utils.import_utils import import_external_libs
 from .utils.logging_utils import set_basic_config
+
+_DATA_PROTO_IMPORT_ERROR = None
+
+try:
+    from .protocol import DataProto
+except ModuleNotFoundError as exc:
+    DataProto = None
+    _DATA_PROTO_IMPORT_ERROR = exc
 
 version_folder = os.path.dirname(os.path.join(os.path.abspath(__file__)))
 
@@ -33,6 +40,15 @@ set_basic_config(level=logging.WARNING)
 
 
 __all__ = ["DataProto", "__version__"]
+
+
+def __getattr__(name):
+    if name == "DataProto" and _DATA_PROTO_IMPORT_ERROR is not None:
+        raise ModuleNotFoundError(
+            "Failed to import verl.DataProto because an optional dependency is missing. "
+            "Install the dependency required by verl.protocol, such as `tensordict`."
+        ) from _DATA_PROTO_IMPORT_ERROR
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 modules = os.getenv("VERL_USE_EXTERNAL_MODULES", "")

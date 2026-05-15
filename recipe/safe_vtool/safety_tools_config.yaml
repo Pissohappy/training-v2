@@ -1,0 +1,94 @@
+tool_backends:
+  grounding:
+    default_backend: self_vlm_grounding
+    allow_gold: false
+    fallback_order:
+      - self_vlm_grounding
+      - ocr_layout_fallback
+      - heuristic_fallback
+
+  layout_parse:
+    default_backend: self_vlm_layout
+    fallback_order:
+      - self_vlm_layout
+      - ocr_block_layout
+      - cv_connected_components
+      - heuristic_fallback
+
+  policy_check:
+    default_backend: rule_based
+    allow_gold: false
+    fallback_order:
+      - rule_based
+
+ablation_modes:
+  no_tools: []
+  self_vlm_tools:
+    - safety_ocr
+    - crop_zoom
+    - grounding
+    - layout_parse
+  external_tools:
+    - safety_ocr
+    - crop_zoom
+    - grounding
+    - layout_parse
+  full_safevtool:
+    - safety_ocr
+    - crop_zoom
+    - grounding
+    - layout_parse
+    - policy_check
+  oracle_tools:
+    - safety_ocr
+    - grounding
+    - policy_check
+
+vlm_tool_client:
+  base_url: ${oc.env:SAFE_VLM_TOOL_BASE_URL,"http://127.0.0.1:8000/v1"}
+  model: ${oc.env:SAFE_VLM_TOOL_MODEL,""}
+  api_key: ${oc.env:SAFE_VLM_TOOL_API_KEY,"EMPTY"}
+  temperature: 0.0
+  max_tokens: 512
+  timeout: 60
+  retry: 2
+
+tools:
+  - class_name: verl.tools.safe_vtool_tools.SafetyOCRTool
+    config:
+      type: native
+      tool_alias: safety_ocr
+  - class_name: verl.tools.safe_vtool_tools.CropZoomTool
+    config:
+      type: native
+      tool_alias: crop_zoom
+  - class_name: verl.tools.safe_vtool_tools.GroundingTool
+    config:
+      type: native
+      tool_alias: grounding
+      default_backend: self_vlm_grounding
+      allow_gold: false
+      vlm_tool_client: ${vlm_tool_client}
+      fallback_order:
+        - self_vlm_grounding
+        - ocr_layout_fallback
+        - heuristic_fallback
+  - class_name: verl.tools.safe_vtool_tools.LayoutParseTool
+    config:
+      type: native
+      tool_alias: layout_parse
+      default_backend: self_vlm_layout
+      vlm_tool_client: ${vlm_tool_client}
+      fallback_order:
+        - self_vlm_layout
+        - ocr_block_layout
+        - cv_connected_components
+        - heuristic_fallback
+  - class_name: verl.tools.safe_vtool_tools.PolicyCheckTool
+    config:
+      type: native
+      tool_alias: policy_check
+      default_backend: rule_based
+      allow_gold: false
+      fallback_order:
+        - rule_based

@@ -32,7 +32,14 @@ def load_source_dataset(
     from datasets import load_dataset
 
     if data_files:
-        return load_dataset("parquet", data_files=data_files)["train"]
+        suffixes = {Path(path).suffix.lower() for path in data_files}
+        if suffixes <= {".parquet"}:
+            loader_name = "parquet"
+        elif suffixes <= {".json", ".jsonl"}:
+            loader_name = "json"
+        else:
+            raise ValueError(f"Unsupported data file suffixes: {sorted(suffixes)}")
+        return load_dataset(loader_name, data_files=data_files)["train"]
 
     if not dataset_name:
         raise ValueError("Either data_files or dataset_name must be provided.")
