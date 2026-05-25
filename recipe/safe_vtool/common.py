@@ -71,8 +71,14 @@ def get_tool_notice(ablation_mode: str | None) -> str:
     return f"Available tools in this run: {', '.join(tool_names)}."
 
 
-def load_safety_prompt() -> str:
-    prompt_path = Path(__file__).resolve().with_name("safety_agent_prompt.txt")
+PROMPT_VARIANTS = ("safety", "neutral", "none")
+
+
+def load_safety_prompt(prompt_variant: str = "safety") -> str:
+    if prompt_variant == "none":
+        return ""
+    filename = "safety_agent_prompt.txt" if prompt_variant == "safety" else f"safety_agent_prompt_{prompt_variant}.txt"
+    prompt_path = Path(__file__).resolve().with_name(filename)
     return prompt_path.read_text(encoding="utf-8").strip()
 
 
@@ -90,12 +96,15 @@ def extract_text_content(content: Any) -> str:
     return str(content or "").strip()
 
 
-def ensure_safety_prompt(messages: list[dict[str, Any]], *, ablation_mode: str | None) -> list[dict[str, Any]]:
+def ensure_safety_prompt(messages: list[dict[str, Any]], *, ablation_mode: str | None, prompt_variant: str = "safety") -> list[dict[str, Any]]:
     normalized = normalize_ablation_mode(ablation_mode)
-    system_text = f"{load_safety_prompt()}\n\n{get_tool_notice(normalized)}"
+    system_text = load_safety_prompt(prompt_variant)
+    if not system_text:
+        return messages
+    system_text = f"{system_text}\n\n{get_tool_notice(normalized)}"
     if messages and messages[0].get("role") == "system":
         first_text = extract_text_content(messages[0].get("content"))
-        if load_safety_prompt() in first_text:
+        if load_safety_prompt(prompt_variant) in first_text:
             return messages
         updated = dict(messages[0])
         updated["content"] = f"{system_text}\n\n{first_text}".strip()

@@ -7,6 +7,7 @@ MODEL_NAME="${MODEL_NAME:-GLM-4.6V-Flash}"
 SERVER_BASE_URL="${SERVER_BASE_URL:-http://127.0.0.1:8000/v1}"
 SERVER_API_KEY="${SERVER_API_KEY:-EMPTY}"
 ABLATION_MODE="${ABLATION_MODE:-self_vlm_tools}"
+PROMPT_VARIANT="${PROMPT_VARIANT:-safety}"
 RESULT_ROOT="${RESULT_ROOT:-eval/results/omni_safe_vtool}"
 INCLUDE_CONVERSATION_TRACE="${INCLUDE_CONVERSATION_TRACE:-1}"
 LOG_DIR="${LOG_DIR:-}"
@@ -49,6 +50,7 @@ for test_cases_file in "${TEST_CASE_FILES[@]}"; do
     --output "${trace_output}"
     --responses-output "${responses_output}"
     --ablation-mode "${ABLATION_MODE}"
+    --prompt-variant "${PROMPT_VARIANT}"
   )
 
   if [ "${INCLUDE_CONVERSATION_TRACE}" = "1" ]; then

@@ -37,13 +37,15 @@ class SafeVToolAgentLoop(ToolAgentLoop):
         tools_kwargs = kwargs.get("tools_kwargs", {}) or {}
         metadata = parse_metadata_blob(tools_kwargs.get("metadata"))
         ablation_mode = normalize_ablation_mode(metadata.get("ablation_mode"))
+        prompt_variant = str(metadata.get("prompt_variant") or "safety")
         sample_id = metadata.get("sample_id") or kwargs.get("index")
         self._configure_tools_for_ablation(ablation_mode)
 
-        kwargs["raw_prompt"] = ensure_safety_prompt(raw_prompt, ablation_mode=ablation_mode)
+        kwargs["raw_prompt"] = ensure_safety_prompt(raw_prompt, ablation_mode=ablation_mode, prompt_variant=prompt_variant)
         self._active_trace = {
             "sample_id": sample_id,
             "ablation_mode": ablation_mode,
+            "prompt_variant": prompt_variant,
             "tool_steps": [],
             "final_response": "",
             "judge_result": None,
@@ -56,6 +58,7 @@ class SafeVToolAgentLoop(ToolAgentLoop):
         output.extra_fields["tool_trace"] = dict(self._active_trace, final_response=final_response)
         output.extra_fields["sample_id"] = sample_id
         output.extra_fields["ablation_mode"] = ablation_mode
+        output.extra_fields["prompt_variant"] = prompt_variant
         return output
 
     async def _decode_final_response(self, output: AgentLoopOutput) -> str:

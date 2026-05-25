@@ -44,6 +44,7 @@ DEFAULT_TOOL_CONFIG_PATH = str(
     Path(__file__).resolve().parent.parent / "recipe" / "safe_vtool" / "safety_tools_config.yaml"
 )
 DEFAULT_OMNI_ROOT = "/mnt/disk1/szchen/VLMBenchmark/repo/OmniSafeBench-MM"
+MIN_ENDPOINT_IMAGE_SIDE = 28
 
 
 @dataclass
@@ -147,6 +148,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--tool-config-path", default=DEFAULT_TOOL_CONFIG_PATH)
     parser.add_argument("--ablation-mode", default="full_safevtool")
+    parser.add_argument("--prompt-variant", default="safety", choices=("safety", "neutral", "none"), help="System prompt variant: safety (default), neutral, or none.")
     parser.add_argument("--max-tool-calls", type=int, default=4)
     parser.add_argument(
         "--include-conversation-trace",
@@ -195,6 +197,7 @@ def _build_examples(
     records: list[dict[str, Any]],
     omni_root: Path,
     ablation_mode: str,
+    prompt_variant: str,
     offset: int,
     limit: int | None,
 ) -> list[OmniExample]:
@@ -217,6 +220,7 @@ def _build_examples(
                 "test_case_id": test_case_id,
                 "source_dataset": "OmniSafeBench-MM",
                 "ablation_mode": ablation_mode,
+                "prompt_variant": prompt_variant,
                 "image_path": absolute_image_path,
                 "jailbreak_image_path": metadata.get("jailbreak_image_path") or str(record.get("image_path") or ""),
             }
@@ -247,6 +251,22 @@ def _build_examples(
     return examples
 
 
+def _prepare_image_for_endpoint(image: Image.Image, *, min_side: int = MIN_ENDPOINT_IMAGE_SIDE) -> Image.Image:
+    prepared = image.convert("RGB")
+    width, height = prepared.size
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Invalid image size for endpoint: {(width, height)}")
+    if min(width, height) >= min_side:
+        return prepared
+
+    canvas_width = max(width, min_side)
+    canvas_height = max(height, min_side)
+    canvas = Image.new("RGB", (canvas_width, canvas_height), color=(255, 255, 255))
+    offset = ((canvas_width - width) // 2, (canvas_height - height) // 2)
+    canvas.paste(prepared, offset)
+    return canvas
+
+
 def _to_endpoint_messages(messages: list[dict[str, Any]], images: list[Any]) -> list[dict[str, Any]]:
     import base64
     import io
@@ -261,7 +281,7 @@ def _to_endpoint_messages(messages: list[dict[str, Any]], images: list[Any]) -> 
         parts: list[dict[str, Any]] = []
         for item in content:
             if isinstance(item, dict) and item.get("type") == "image":
-                image = images[image_index]
+                image = _prepare_image_for_endpoint(images[image_index])
                 image_index += 1
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
@@ -338,6 +358,72 @@ def _extract_safe_vtool_final_answer(response_text: str) -> str | None:
     return value or None
 
 
+def _build_failure_records(example: OmniExample, server_model: str | None, *, ablation_mode: str, prompt_variant: str, error_message: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    metadata = copy.deepcopy(example.original_record.get("metadata") or {})
+    metadata.update(
+        {
+            "attack_method": metadata.get("attack_method"),
+            "original_prompt": metadata.get("original_prompt"),
+            "jailbreak_prompt": metadata.get("jailbreak_prompt") or example.query,
+            "jailbreak_image_path": metadata.get("jailbreak_image_path") or example.original_record.get("image_path"),
+            "original_image_path": metadata.get("original_image_path"),
+            "image_path": example.absolute_image_path,
+            "source_dataset": "OmniSafeBench-MM",
+            "ablation_mode": ablation_mode,
+            "prompt_variant": prompt_variant,
+            "test_case_id": example.uid,
+            "defense_method": "None",
+        }
+    )
+
+    detailed_record = {
+        "index": example.index,
+        "uid": example.uid,
+        "test_case_id": example.uid,
+        "model": server_model,
+        "query": example.query,
+        "image_path": example.absolute_image_path,
+        "ablation_mode": ablation_mode,
+        "prompt_variant": prompt_variant,
+        "generated_text": "",
+        "final_answer_text": "",
+        "reasoning_trace": None,
+        "response_parse_status": "request_error",
+        "metadata": metadata,
+        "error": error_message,
+        "tool_trace": {
+            "sample_id": example.uid,
+            "ablation_mode": ablation_mode,
+            "prompt_variant": prompt_variant,
+            "tool_steps": [],
+            "final_response": "",
+            "tool_call_parse_stats": {
+                "fallback_used": False,
+                "recovered_tool_calls": 0,
+                "truncated_tool_call_block": False,
+                "text_tool_call_detected": False,
+            },
+        },
+        "tool_call_parse_stats": {
+            "fallback_used": False,
+            "recovered_tool_calls": 0,
+            "truncated_tool_call_block": False,
+            "text_tool_call_detected": False,
+        },
+    }
+    judge_ready_record = {
+        "test_case_id": example.uid,
+        "model_response": "",
+        "model_name": server_model,
+        "metadata": metadata,
+        "reasoning_trace": None,
+        "final_answer": "",
+        "response_parse_status": "request_error",
+        "error": error_message,
+    }
+    return detailed_record, judge_ready_record
+
+
 async def _run_sample(
     *,
     example: OmniExample,
@@ -347,10 +433,11 @@ async def _run_sample(
     tools: dict[str, Any],
     tool_schemas: list[dict[str, Any]],
     ablation_mode: str,
+    prompt_variant: str,
     max_tool_calls: int,
     include_conversation_trace: bool,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    messages = ensure_safety_prompt(copy.deepcopy(example.raw_prompt), ablation_mode=ablation_mode)
+    messages = ensure_safety_prompt(copy.deepcopy(example.raw_prompt), ablation_mode=ablation_mode, prompt_variant=prompt_variant)
     images = list(example.multi_modal_data.get("image") or example.multi_modal_data.get("images") or [])
     eval_agent_data = type(
         "EvalAgentData",
@@ -366,6 +453,7 @@ async def _run_sample(
     tool_trace = {
         "sample_id": example.uid,
         "ablation_mode": ablation_mode,
+        "prompt_variant": prompt_variant,
         "tool_steps": [],
         "final_response": "",
         "tool_call_parse_stats": {
@@ -500,6 +588,7 @@ async def _run_sample(
             "image_path": example.absolute_image_path,
             "source_dataset": "OmniSafeBench-MM",
             "ablation_mode": ablation_mode,
+            "prompt_variant": prompt_variant,
             "test_case_id": example.uid,
             "defense_method": "None",
         }
@@ -514,6 +603,7 @@ async def _run_sample(
         "query": example.query,
         "image_path": example.absolute_image_path,
         "ablation_mode": ablation_mode,
+        "prompt_variant": prompt_variant,
         "generated_text": generated_text,
         "final_answer_text": final_answer_text,
         "reasoning_trace": reasoning_trace,
@@ -540,6 +630,7 @@ async def _run_sample(
 async def main_async() -> None:
     args = parse_args()
     ablation_mode = normalize_ablation_mode(args.ablation_mode)
+    prompt_variant = args.prompt_variant
     omni_root = Path(args.omni_root).resolve()
     request_extra_body = parse_json_dict(args.request_extra_body)
     records = _load_jsonl_records(args.test_cases_file)
@@ -547,6 +638,7 @@ async def main_async() -> None:
         records=records,
         omni_root=omni_root,
         ablation_mode=ablation_mode,
+        prompt_variant=prompt_variant,
         offset=args.offset,
         limit=args.limit,
     )
@@ -581,17 +673,29 @@ async def main_async() -> None:
         progress = tqdm(examples, desc="SafeVTool eval", unit="sample")
         for example in progress:
             progress.set_postfix_str(f"id={example.uid}")
-            detailed_record, judge_ready_record = await _run_sample(
-                example=example,
-                server_manager=server_manager,
-                sampling_params=build_sampling_params(args),
-                request_extra_body=request_extra_body,
-                tools=tools,
-                tool_schemas=tool_schemas,
-                ablation_mode=ablation_mode,
-                max_tool_calls=args.max_tool_calls,
-                include_conversation_trace=args.include_conversation_trace,
-            )
+            try:
+                detailed_record, judge_ready_record = await _run_sample(
+                    example=example,
+                    server_manager=server_manager,
+                    sampling_params=build_sampling_params(args),
+                    request_extra_body=request_extra_body,
+                    tools=tools,
+                    tool_schemas=tool_schemas,
+                    ablation_mode=ablation_mode,
+                    prompt_variant=prompt_variant,
+                    max_tool_calls=args.max_tool_calls,
+                    include_conversation_trace=args.include_conversation_trace,
+                )
+            except Exception as exc:  # noqa: BLE001
+                error_message = str(exc)
+                progress.write(f"[warning] sample {example.uid} failed: {error_message}")
+                detailed_record, judge_ready_record = _build_failure_records(
+                    example,
+                    server_manager.model,
+                    ablation_mode=ablation_mode,
+                    prompt_variant=prompt_variant,
+                    error_message=error_message,
+                )
             append_jsonl(args.output, detailed_record)
             append_jsonl(responses_output, judge_ready_record)
         progress.close()

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RESULT_ROOT="${RESULT_ROOT:-eval/results/omni_safe_vtool}"
+RESULT_ROOT="${RESULT_ROOT:-eval/results/neutral_tools}"
 JUDGE_MODEL="${JUDGE_MODEL:-gpt-oss-120b}"
 JUDGE_PROVIDER="${JUDGE_PROVIDER:-any}"
-JUDGE_BASE_URL="${JUDGE_BASE_URL:-http://127.0.0.1:8005/v1}"
+JUDGE_BASE_URL="${JUDGE_BASE_URL:-http://127.0.0.1:8015/v1}"
 JUDGE_API_KEY="${JUDGE_API_KEY:-EMPTY}"
 JUDGE_MAX_TOKENS="${JUDGE_MAX_TOKENS:-2000}"
 JUDGE_TEMPERATURE="${JUDGE_TEMPERATURE:-0.0}"

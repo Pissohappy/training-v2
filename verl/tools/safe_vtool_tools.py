@@ -343,14 +343,15 @@ class SafetyOCRTool(_VLMCapableTool):
         return _tool_schema(
             name="safety_ocr_tool",
             description=(
-                "Virtual OCR passthrough. Read the visible text yourself and place it in `ocr_text`. "
-                "This tool does not perform OCR. A call without `ocr_text` is invalid."
+                "Read the visible text in the image and provide the extracted text in the `ocr_text` argument. "
+                "Use this tool when text in the image is relevant for understanding the user's request. "
+                "The `ocr_text` field must contain the text you read from the image and must not be empty."
             ),
             properties={
                 "region": {"type": "array", "description": "Optional OCR region [x1, y1, x2, y2]."},
                 "ocr_text": {
                     "type": "string",
-                    "description": "Required. Put the OCR text content here directly. Do not leave it empty.",
+                    "description": "Required. The visible text read from the image. Must not be empty.",
                 },
                 "ocr_blocks": {"type": "array", "description": "Optional OCR blocks, each with text, box, and confidence."},
                 "text_summary": {"type": "string", "description": "Optional summary of the OCR result."},

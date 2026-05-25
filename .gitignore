@@ -139,3 +139,9 @@ eval/results
 *.slurm
 eval/sft_output
 eval/sft_data
+
+# local generated safe/benchmark artifacts
+*_demo_*.jsonl
+tmp_*.jsonl
+*_test.txt
+recipe/safe_vtool/*.bak
